@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MeshCore Contacts</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #1b1f24; --muted: #5d6673;
+    --border: #e2e5ea; --accent: #0f7b6c; --accent-soft: #d9f0ec;
+    --c-companion: #3b6fd8; --c-repeater: #0f7b6c; --c-room: #c26a12; --c-sensor: #8a4fc7;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111418; --card: #1a1e24; --text: #e6e9ee; --muted: #9aa3ae;
+      --border: #2b313a; --accent: #3cc4ae; --accent-soft: #173a35;
+      --c-companion: #6f9bf0; --c-repeater: #3cc4ae; --c-room: #e8954a; --c-sensor: #b58ae6;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 32px 16px 64px; }
+  header { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; justify-content: space-between; margin-bottom: 28px; }
+  h1 { margin: 0; font-size: 1.9rem; letter-spacing: -0.02em; }
+  h2 { margin: 0 0 12px; font-size: 1.05rem; }
+  .sub { color: var(--muted); margin: 4px 0 0; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px;
+    background: var(--accent); color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600;
+  }
+  @media (prefers-color-scheme: dark) { .btn { color: #0b1512; } }
+  .btn:hover { filter: brightness(1.08); }
+  .links { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 8px; font-size: 0.9rem; }
+  .links a { color: var(--accent); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .tile, .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
+  .tile { padding: 16px; }
+  .tile .v { font-size: 1.8rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .tile .l { color: var(--muted); font-size: 0.85rem; }
+  .card { padding: 18px; margin-bottom: 20px; min-width: 0; }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+  .grid2 .card { margin-bottom: 0; }
+  .grid2 + .card, .grid2 { margin-bottom: 20px; }
+  #map { height: 440px; border-radius: 8px; }
+  .bars { display: grid; gap: 8px; }
+  .bar { display: grid; grid-template-columns: 110px 1fr 44px; gap: 10px; align-items: center; font-size: 0.9rem; }
+  .bar .track { background: var(--bg); border-radius: 4px; height: 18px; overflow: hidden; }
+  .bar .fill { height: 100%; border-radius: 4px; background: var(--accent); }
+  .bar .n { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; font-size: 0.85rem; color: var(--muted); }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  .tbl { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.8rem; background: var(--accent-soft); }
+  .status { color: var(--muted); padding: 40px 0; text-align: center; }
+  footer { color: var(--muted); font-size: 0.85rem; margin-top: 32px; }
+  footer a { color: var(--accent); }
+  code { font-size: 0.85em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>MeshCore Contacts</h1>
+      <p class="sub">Discovered contacts imported from MeshCore stations into <code>meshcore_contacts.db</code>.</p>
+      <div class="links">
+        <a id="dl-db" href="meshcore_contacts.db">Download the database</a>
+        <a id="lnk-view" href="#" target="_blank" rel="noopener">Browse all contacts in Datasette</a>
+      </div>
+    </div>
+    <a class="btn" id="lnk-datasette" href="#" target="_blank" rel="noopener">Open in Datasette ↗</a>
+  </header>
+
+  <div id="status" class="status">Loading database…</div>
+
+  <main id="content" hidden>
+    <section class="tiles" id="tiles"></section>
+
+    <section class="card">
+      <h2>Where the nodes are</h2>
+      <div id="map"></div>
+      <div class="legend" id="map-legend"></div>
+    </section>
+
+    <div class="grid2">
+      <section class="card">
+        <h2>Unique nodes by type</h2>
+        <div class="bars" id="types"></div>
+      </section>
+      <section class="card">
+        <h2>Nodes by hop count (closest station)</h2>
+        <div class="bars" id="hops"></div>
+      </section>
+    </div>
+
+    <section class="card">
+      <h2>Stations</h2>
+      <div class="tbl"><table id="stations"></table></div>
+    </section>
+
+    <section class="card">
+      <h2>Most recently heard</h2>
+      <div class="tbl"><table id="recent"></table></div>
+    </section>
+
+    <section class="card">
+      <h2>Import history</h2>
+      <div class="tbl"><table id="imports"></table></div>
+    </section>
+  </main>
+
+  <footer>
+    Summary computed in your browser from the live database with
+    <a href="https://sql.js.org/">sql.js</a>. Explore it interactively with
+    <a href="https://lite.datasette.io/">Datasette Lite</a>.
+    Source: <a href="https://github.com/payne/MeshCoreContacts">github.com/payne/MeshCoreContacts</a>.
+  </footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+(async function () {
+  const DB_FILE = 'meshcore_contacts.db';
+  const dbUrl = new URL(DB_FILE, location.href).href;
+  const lite = 'https://lite.datasette.io/?url=' + encodeURIComponent(dbUrl);
+  document.getElementById('lnk-datasette').href = lite;
+  document.getElementById('lnk-view').href = lite + '#/meshcore_contacts/v_contacts';
+
+  const TYPE_COLORS = { 1: '--c-companion', 2: '--c-repeater', 3: '--c-room', 4: '--c-sensor' };
+  const css = getComputedStyle(document.documentElement);
+  const typeColor = t => css.getPropertyValue(TYPE_COLORS[t] || '--muted').trim();
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const fmt = n => Number(n).toLocaleString();
+
+  let db;
+  try {
+    const SQL = await initSqlJs({ locateFile: f => 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/' + f });
+    const resp = await fetch(DB_FILE);
+    if (!resp.ok) throw new Error(resp.status + ' ' + resp.statusText);
+    db = new SQL.Database(new Uint8Array(await resp.arrayBuffer()));
+  } catch (e) {
+    document.getElementById('status').textContent =
+      'Could not load ' + DB_FILE + ' (' + e.message + '). Serve this page over HTTP, e.g. GitHub Pages or `python -m http.server`.';
+    return;
+  }
+
+  const rows = sql => {
+    const res = db.exec(sql);
+    if (!res.length) return [];
+    const { columns, values } = res[0];
+    return values.map(v => Object.fromEntries(columns.map((c, i) => [c, v[i]])));
+  };
+  const one = sql => rows(sql)[0] || {};
+  const now = Math.floor(Date.now() / 1000);
+
+  // Tiles
+  const t = one(`
+    SELECT (SELECT count(*) FROM stations)                     AS stations,
+           (SELECT count(DISTINCT public_key) FROM contacts)   AS nodes,
+           (SELECT count(*) FROM contacts)                     AS sightings,
+           (SELECT count(DISTINCT public_key) FROM contacts
+             WHERE latitude IS NOT NULL AND latitude != 0)     AS geo,
+           (SELECT count(DISTINCT public_key) FROM contacts
+             WHERE last_advert BETWEEN ${now - 86400} AND ${now + 3600}) AS day,
+           (SELECT max(advert_path_hops) FROM contacts)        AS maxhops`);
+  const tiles = [
+    [t.nodes, 'unique nodes'],
+    [t.stations, 'reporting stations'],
+    [t.sightings, 'contact records'],
+    [t.geo, 'nodes with a location'],
+    [t.day, 'heard in the last 24 h'],
+    [t.maxhops, 'max hops away'],
+  ];
+  document.getElementById('tiles').innerHTML = tiles
+    .map(([v, l]) => `<div class="tile"><div class="v">${fmt(v ?? 0)}</div><div class="l">${l}</div></div>`).join('');
+
+  // Nodes collapsed to one row per public key, using the closest station's view
+  const nodes = rows(`
+    SELECT c.public_key, c.name, c.type, COALESCE(ct.name, 'unknown') AS type_name,
+           c.latitude, c.longitude, min(c.advert_path_hops) AS hops, max(c.last_advert) AS last_advert
+    FROM contacts c LEFT JOIN contact_types ct ON ct.type = c.type
+    GROUP BY c.public_key`);
+
+  // Types
+  const types = rows(`
+    SELECT ct.type, ct.name, count(DISTINCT c.public_key) AS n
+    FROM contact_types ct LEFT JOIN contacts c ON c.type = ct.type
+    GROUP BY ct.type ORDER BY n DESC`);
+  const maxType = Math.max(1, ...types.map(r => r.n));
+  document.getElementById('types').innerHTML = types.map(r => `
+    <div class="bar"><span>${esc(r.name)}</span>
+      <div class="track"><div class="fill" style="width:${r.n / maxType * 100}%;background:${typeColor(r.type)}"></div></div>
+      <span class="n">${fmt(r.n)}</span></div>`).join('');
+
+  // Hops
+  const hopCounts = {};
+  nodes.forEach(n => { if (n.hops != null) hopCounts[n.hops] = (hopCounts[n.hops] || 0) + 1; });
+  const hopKeys = Object.keys(hopCounts).map(Number).sort((a, b) => a - b);
+  const maxHop = Math.max(1, ...Object.values(hopCounts));
+  document.getElementById('hops').innerHTML = hopKeys.map(h => `
+    <div class="bar"><span>${h === 0 ? 'direct' : h + (h === 1 ? ' hop' : ' hops')}</span>
+      <div class="track"><div class="fill" style="width:${hopCounts[h] / maxHop * 100}%"></div></div>
+      <span class="n">${fmt(hopCounts[h])}</span></div>`).join('');
+
+  // Stations
+  const st = rows(`
+    SELECT s.name, count(c.id) AS contacts,
+           sum(c.type = 1) AS companions, sum(c.type = 2) AS repeaters, sum(c.type = 3) AS rooms,
+           round(avg(c.advert_path_hops), 1) AS avg_hops, s.last_import_utc
+    FROM stations s LEFT JOIN contacts c ON c.station_id = s.id
+    GROUP BY s.id ORDER BY contacts DESC`);
+  document.getElementById('stations').innerHTML =
+    `<tr><th>Station</th><th class="num">Contacts</th><th class="num">Companions</th><th class="num">Repeaters</th>
+         <th class="num">Room servers</th><th class="num">Avg hops</th><th>Last import (UTC)</th></tr>` +
+    st.map(r => `<tr><td><strong>${esc(r.name)}</strong></td><td class="num">${fmt(r.contacts)}</td>
+      <td class="num">${fmt(r.companions ?? 0)}</td><td class="num">${fmt(r.repeaters ?? 0)}</td>
+      <td class="num">${fmt(r.rooms ?? 0)}</td><td class="num">${r.avg_hops ?? '–'}</td>
+      <td>${esc((r.last_import_utc || '').replace('T', ' ').replace('Z', ''))}</td></tr>`).join('');
+
+  // Recent (ignore adverts with clocks set in the future)
+  const recent = nodes.filter(n => n.last_advert && n.last_advert <= now + 3600)
+    .sort((a, b) => b.last_advert - a.last_advert).slice(0, 15);
+  const ago = s => {
+    const d = now - s;
+    if (d < 3600) return Math.max(0, Math.round(d / 60)) + ' min ago';
+    if (d < 86400) return Math.round(d / 3600) + ' h ago';
+    return Math.round(d / 86400) + ' d ago';
+  };
+  document.getElementById('recent').innerHTML =
+    `<tr><th>Name</th><th>Type</th><th class="num">Hops</th><th>Last advert (UTC)</th><th></th></tr>` +
+    recent.map(n => `<tr><td>${esc(n.name)}</td>
+      <td><span class="dot" style="background:${typeColor(n.type)}"></span>${esc(n.type_name)}</td>
+      <td class="num">${n.hops ?? '–'}</td>
+      <td>${new Date(n.last_advert * 1000).toISOString().slice(0, 16).replace('T', ' ')}</td>
+      <td style="color:var(--muted)">${ago(n.last_advert)}</td></tr>`).join('');
+
+  // Imports
+  const imp = rows(`
+    SELECT s.name AS station, i.source_file, i.imported_utc, i.contacts_in_file, i.inserted, i.updated, i.unchanged
+    FROM imports i JOIN stations s ON s.id = i.station_id ORDER BY i.imported_utc DESC`);
+  document.getElementById('imports').innerHTML =
+    `<tr><th>When (UTC)</th><th>Station</th><th>File</th><th class="num">In file</th>
+         <th class="num">New</th><th class="num">Updated</th><th class="num">Unchanged</th></tr>` +
+    imp.map(r => `<tr><td>${esc(r.imported_utc.replace('T', ' ').replace('Z', ''))}</td>
+      <td>${esc(r.station)}</td><td>${esc(r.source_file.split('/').pop())}</td>
+      <td class="num">${fmt(r.contacts_in_file)}</td><td class="num">${fmt(r.inserted)}</td>
+      <td class="num">${fmt(r.updated)}</td><td class="num">${fmt(r.unchanged)}</td></tr>`).join('');
+
+  document.getElementById('status').hidden = true;
+  document.getElementById('content').hidden = false;
+
+  // Map
+  const geo = nodes.filter(n => n.latitude && n.longitude);
+  const map = L.map('map', { scrollWheelZoom: false });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18, attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
+  geo.forEach(n => {
+    L.circleMarker([n.latitude, n.longitude], {
+      radius: 6, weight: 1, color: '#fff', fillColor: typeColor(n.type), fillOpacity: 0.9
+    }).bindPopup(`<strong>${esc(n.name)}</strong><br>${esc(n.type_name)} · ${n.hops ?? '?'} hops`).addTo(map);
+  });
+  if (geo.length) map.fitBounds(geo.map(n => [n.latitude, n.longitude]), { padding: [20, 20] });
+  else map.setView([41.26, -95.94], 8);
+  document.getElementById('map-legend').innerHTML = types.filter(r => r.n).map(r =>
+    `<span><span class="dot" style="background:${typeColor(r.type)}"></span>${esc(r.name)}</span>`).join('') +
+    `<span>${fmt(geo.length)} of ${fmt(nodes.length)} nodes have a location</span>`;
+})();
+</script>
+</body>
+</html>
