@@ -65,14 +65,31 @@
   footer { color: var(--muted); font-size: 0.85rem; margin-top: 32px; }
   footer a { color: var(--accent); }
   code { font-size: 0.85em; }
+  .updated { font-size: 0.9rem; }
+  .gh-ribbon { position: absolute; top: 0; right: 0; width: 150px; height: 150px; overflow: hidden; z-index: 1000; pointer-events: none; }
+  .gh-ribbon a {
+    position: absolute; top: 38px; right: -42px; width: 200px; transform: rotate(45deg);
+    padding: 6px 0; text-align: center; pointer-events: auto;
+    background: var(--accent); color: #fff; font-weight: 700; font-size: 0.8rem; letter-spacing: 0.02em;
+    text-decoration: none; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    border-top: 1px dashed rgba(255, 255, 255, 0.5); border-bottom: 1px dashed rgba(255, 255, 255, 0.5);
+  }
+  @media (prefers-color-scheme: dark) { .gh-ribbon a { color: #0b1512; border-color: rgba(0, 0, 0, 0.4); } }
+  .gh-ribbon a:hover { filter: brightness(1.08); }
+  @media (max-width: 600px) {
+    .gh-ribbon { width: 110px; height: 110px; }
+    .gh-ribbon a { top: 26px; right: -50px; font-size: 0.7rem; padding: 4px 0; }
+  }
 </style>
 </head>
 <body>
+<div class="gh-ribbon"><a href="https://github.com/payne/MeshCoreContacts" target="_blank" rel="noopener">Fork me on GitHub</a></div>
 <div class="wrap">
   <header>
     <div>
       <h1>MeshCore Contacts</h1>
       <p class="sub">Discovered contacts imported from MeshCore stations into <code>meshcore_contacts.db</code>.</p>
+      <p class="sub updated" id="updated"></p>
       <div class="links">
         <a id="dl-db" href="meshcore_contacts.db">Download the database</a>
         <a id="lnk-view" href="#" target="_blank" rel="noopener">Browse all contacts in Datasette</a>
@@ -163,6 +180,15 @@
   };
   const one = sql => rows(sql)[0] || {};
   const now = Math.floor(Date.now() / 1000);
+
+  // Last update = most recent import
+  const last = one(`SELECT max(imported_utc) AS ts FROM imports`).ts;
+  if (last) {
+    const d = new Date(last.endsWith('Z') ? last : last + 'Z');
+    const el = document.getElementById('updated');
+    el.textContent = 'Data last updated ' + last.replace('T', ' ').replace('Z', '').slice(0, 16) + ' UTC' +
+      (isNaN(d) ? '' : ' (' + d.toLocaleString() + ' local)') + '.';
+  }
 
   // Tiles
   const t = one(`
